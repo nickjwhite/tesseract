@@ -887,6 +887,7 @@ set_lang_specific_parameters() {
           TEXT2IMAGE_EXTRA_ARGS=" --ligatures"   # Add ligatures when supported.
           test -z "$FONTS" && FONTS=( "${EARLY_LATIN_FONTS[@]}" );;
     lat )
+          TEXT2IMAGE_EXTRA_ARGS=" --ligatures"   # Add ligatures when supported.
           test -z "$EXPOSURES" && EXPOSURES="-3 -2 -1 0 1 2 3"
           test -z "$FONTS" && FONTS=( "${NEOLATIN_FONTS[@]}" ) ;;
     spa_old )
