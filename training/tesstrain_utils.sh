@@ -25,6 +25,7 @@ OUTPUT_DIR="/tmp/tesstrain/tessdata"
 OVERWRITE=0
 RUN_SHAPE_CLUSTERING=0
 EXTRACT_FONT_PROPERTIES=1
+EXTRAIMG_DIR=""
 WORKSPACE_DIR=`mktemp -d`
 
 # Logging helper functions.
@@ -113,6 +114,9 @@ parse_flags() {
             --fonts_dir)
                 parse_value "FONTS_DIR" ${ARGV[$j]}
                 i=$j ;;
+            --extraimg_dir)
+                parse_value "EXTRAIMG_DIR" ${ARGV[$j]}
+                i=$j ;;
             --lang)
                 parse_value "LANG_CODE" ${ARGV[$j]}
                 i=$j ;;
@@ -199,7 +203,7 @@ generate_font_image() {
 
     local common_args="--fontconfig_tmpdir=${FONT_CONFIG_CACHE}"
     common_args+=" --fonts_dir=${FONTS_DIR} --strip_unrenderable_words"
-    common_args+=" --fontconfig_refresh_config_file=false --leading=${LEADING}"
+    common_args+=" --fontconfig_refresh_config_file=false"
     common_args+=" --char_spacing=${CHAR_SPACING} --exposure=${EXPOSURE}"
     common_args+=" --outputbase=${outbase}"
 
@@ -269,6 +273,18 @@ phase_I_generate_image() {
             check_file_readable ${outbase}.box ${outbase}.tif
         done
     done
+}
+
+# Phase XI : Copy any e(X)tra (I)mages specified to the training dir.
+phase_XI_extra_image() {
+    tlog "\n=== Phase XI: Copying any extra images to the training directory ==="
+
+    if [[ -z "$EXTRAIMG_DIR" ]]; then
+        tlog "Skipping Phase XI as EXTRAIMG_DIR has not been set"
+        return
+    fi
+
+    cp -r "$EXTRAIMG_DIR"/* "${TRAINING_DIR}"
 }
 
 # Phase UP : Generate (U)nicharset and (P)roperties file.

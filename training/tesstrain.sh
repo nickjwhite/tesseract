@@ -25,6 +25,7 @@
 #    --overwrite                # Safe to overwrite files in output_dir.
 #    --run_shape_clustering     # Run shape clustering (use for Indic langs).
 #    --exposures EXPOSURES      # A list of exposure levels to use (e.g. "-1 0 1").
+#    --extraimg_dir IMGDIR      # Optional directory containing extra img/box files.
 #
 # OPTIONAL flags for input data. If unspecified we will look for them in
 # the langdata_dir directory.
@@ -58,6 +59,7 @@ set_lang_specific_parameters ${LANG_CODE}
 initialize_fontconfig
 
 phase_I_generate_image 8
+phase_XI_extra_image
 phase_UP_generate_unicharset
 phase_D_generate_dawg
 phase_E_extract_features "box.train" 8
