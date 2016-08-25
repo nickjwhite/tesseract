@@ -390,9 +390,7 @@ phase_E_extract_features() {
     tlog "\n=== Phase E: Extracting features ==="
 
     local img_files=""
-    for exposure in ${EXPOSURES}; do
-        img_files=${img_files}' '$(ls ${TRAINING_DIR}/*.exp${exposure}.tif)
-    done
+    img_files=$(ls ${TRAINING_DIR}/*.tif)
 
     # Use any available language-specific configs.
     local config=""
