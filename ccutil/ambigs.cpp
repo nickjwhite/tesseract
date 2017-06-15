@@ -24,13 +24,9 @@
 #include "helpers.h"
 #include "universalambigs.h"
 
-#if defined _WIN32 || defined(__CYGWIN__)
-#ifndef __GNUC__
-#define strtok_r strtok_s
-#else
-#include "strtok_r.h"
-#endif  /* __GNUC__ */
-#endif  /* _WIN32 __CYGWIN__*/
+#if defined(_WIN32) && !defined(__GNUC__)
+# define strtok_r(str, delim, saveptr) strtok_s(str, delim, saveptr)
+#endif  /* _WIN32 && !__GNUC__ */
 
 namespace tesseract {
 
