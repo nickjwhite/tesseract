@@ -13,7 +13,7 @@ CPPFLAGS = -DUSE_STD_NAMESPACE -DVERSION=\"$(VERSION)\" -DPACKAGE_VERSION=\"$(VE
            -Wall \
            -fPIC \
            -O2 \
-           -std=c++17 -std=c++20 \
+           -std=c++17 \
            -I../include -I../src \
            -I../src/ccmain -I../src/api -I../src/ccutil -I../src/ccstruct -I../src/viewer -I../src/textord -I../src/dict -I../src/classify -I../src/display -I../src/wordrec -I../src/cutil -I../src/lstm -I../src/arch -I../src/opencl \
            -I../src/training -I../src/training/common -I../src/training/pango -I../src/training/unicharset \
