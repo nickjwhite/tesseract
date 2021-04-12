@@ -16,15 +16,16 @@
  *
  **********************************************************************/
 
-#include "callcpp.h"
-#include "chop.h"
-#include "globals.h"
-#include "pageres.h"
-#include "wordrec.h"
-#include "featdefs.h"
-#include "params_model.h"
-
 #include <cmath>
+
+#include "wordrec.h"
+
+#ifndef DISABLED_LEGACY_ENGINE
+#  include "chop.h"
+#  include "featdefs.h"
+#  include "pageres.h"
+#  include "params_model.h"
+#endif
 
 namespace tesseract {
 
@@ -35,10 +36,11 @@ namespace tesseract {
  * init_permute determines whether to initialize the permute functions
  * and Dawg models.
  */
-void Wordrec::program_editup(const char *textbase,
-                             TessdataManager *init_classifier,
+void Wordrec::program_editup(const std::string &textbase, TessdataManager *init_classifier,
                              TessdataManager *init_dict) {
-  if (textbase != nullptr) imagefile = textbase;
+  if (!textbase.empty()) {
+    imagefile = textbase;
+  }
 #ifndef DISABLED_LEGACY_ENGINE
   InitFeatureDefs(&feature_defs_);
   InitAdaptiveClassifier(init_classifier);
@@ -48,9 +50,8 @@ void Wordrec::program_editup(const char *textbase,
     getDict().FinishLoad();
   }
   pass2_ok_split = chop_ok_split;
-#endif  // ndef DISABLED_LEGACY_ENGINE
+#endif // ndef DISABLED_LEGACY_ENGINE
 }
-
 
 /**
  * @name end_recog
@@ -58,11 +59,10 @@ void Wordrec::program_editup(const char *textbase,
  * Cleanup and exit the recog program.
  */
 int Wordrec::end_recog() {
-  program_editdown (0);
+  program_editdown(0);
 
   return (0);
 }
-
 
 /**
  * @name program_editdown
@@ -73,12 +73,22 @@ int Wordrec::end_recog() {
 void Wordrec::program_editdown(int32_t elasped_time) {
 #ifndef DISABLED_LEGACY_ENGINE
   EndAdaptiveClassifier();
-#endif  // ndef DISABLED_LEGACY_ENGINE
+#endif // ndef DISABLED_LEGACY_ENGINE
   getDict().End();
 }
 
+/**
+ * @name dict_word()
+ *
+ * Test the dictionaries, returning NO_PERM (0) if not found, or one
+ * of the PermuterType values if found, according to the dictionary.
+ */
+int Wordrec::dict_word(const WERD_CHOICE &word) {
+  return getDict().valid_word(word);
+}
 
 #ifndef DISABLED_LEGACY_ENGINE
+
 /**
  * @name set_pass1
  *
@@ -89,7 +99,6 @@ void Wordrec::set_pass1() {
   language_model_->getParamsModel().SetPass(ParamsModel::PTRAIN_PASS1);
   SettupPass1();
 }
-
 
 /**
  * @name set_pass2
@@ -102,7 +111,6 @@ void Wordrec::set_pass2() {
   SettupPass2();
 }
 
-
 /**
  * @name cc_recog
  *
@@ -111,25 +119,10 @@ void Wordrec::set_pass2() {
 void Wordrec::cc_recog(WERD_RES *word) {
   getDict().reset_hyphen_vars(word->word->flag(W_EOL));
   chop_word_main(word);
-  word->DebugWordChoices(getDict().stopper_debug_level >= 1,
-                         getDict().word_to_debug.string());
+  word->DebugWordChoices(getDict().stopper_debug_level >= 1, getDict().word_to_debug.c_str());
   ASSERT_HOST(word->StatesAllValid());
 }
-#endif  // ndef DISABLED_LEGACY_ENGINE
 
-
-/**
- * @name dict_word()
- *
- * Test the dictionaries, returning NO_PERM (0) if not found, or one
- * of the PermuterType values if found, according to the dictionary.
- */
-int Wordrec::dict_word(const WERD_CHOICE &word) {
-  return getDict().valid_word(word);
-}
-
-
-#ifndef DISABLED_LEGACY_ENGINE
 /**
  * @name call_matcher
  *
@@ -138,17 +131,18 @@ int Wordrec::dict_word(const WERD_CHOICE &word) {
  */
 BLOB_CHOICE_LIST *Wordrec::call_matcher(TBLOB *tessblob) {
   // Rotate the blob for classification if necessary.
-  TBLOB* rotated_blob = tessblob->ClassifyNormalizeIfNeeded();
+  TBLOB *rotated_blob = tessblob->ClassifyNormalizeIfNeeded();
   if (rotated_blob == nullptr) {
     rotated_blob = tessblob;
   }
-  BLOB_CHOICE_LIST *ratings = new BLOB_CHOICE_LIST();  // matcher result
+  auto *ratings = new BLOB_CHOICE_LIST(); // matcher result
   AdaptiveClassifier(rotated_blob, ratings);
   if (rotated_blob != tessblob) {
     delete rotated_blob;
   }
   return ratings;
 }
-#endif  // ndef DISABLED_LEGACY_ENGINE
 
-}  // namespace tesseract
+#endif // ndef DISABLED_LEGACY_ENGINE
+
+} // namespace tesseract

@@ -1,5 +1,4 @@
-/* -*-C-*-
-###############################################################################
+/******************************************************************************
 #
 # File:         oldlist.cpp
 # Description:  List processing procedures.
@@ -56,27 +55,13 @@
 
 ******************************************************************************/
 #include "oldlist.h"
+
+#include "errcode.h" // for ASSERT_HOST
+
 #include <cstdio>
-#include <cstring>      // for strcmp
-#include "errcode.h"    // for ASSERT_HOST
-#include "structures.h"
+#include <cstring> // for strcmp
 
-/*----------------------------------------------------------------------
-              M a c r o s
-----------------------------------------------------------------------*/
-#define add_on(l, x) l = push(l, first_node(x))
-#define next_one(l) l = list_rest(l)
-
-/**********************************************************************
- *  c o p y   f i r s t
- *
- *  Do the appropriate kind a push operation to copy the first node from
- *  one list to another.
- *
- **********************************************************************/
-
-#define copy_first(l1,l2)  \
-(l2=push(l2, first_node(l1)))
+namespace tesseract {
 
 /*----------------------------------------------------------------------
               F u n c t i o n s
@@ -85,11 +70,11 @@
 /**********************************************************************
  *  i s   s a m e
  *
- *  Compare the list node with the key value return TRUE (non-zero)
- *  if they are equivalent strings.  (Return FALSE if not)
+ *  Compare the list node with the key value return true (non-zero)
+ *  if they are equivalent strings.  (Return false if not)
  **********************************************************************/
 static int is_same(void *item1, void *item2) {
-  return strcmp((char *)item1, (char *)item2) == 0;
+  return strcmp(static_cast<char *>(item1), static_cast<char *>(item2)) == 0;
 }
 
 /**********************************************************************
@@ -116,7 +101,9 @@ LIST delete_d(LIST list, void *key, int_compare is_equal) {
   LIST result = NIL_LIST;
   LIST last_one = NIL_LIST;
 
-  if (is_equal == nullptr) is_equal = is_same;
+  if (is_equal == nullptr) {
+    is_equal = is_same;
+  }
 
   while (list != NIL_LIST) {
     if (!(*is_equal)(first_node(list), key)) {
@@ -148,7 +135,7 @@ LIST destroy(LIST list) {
 
   while (list != NIL_LIST) {
     next = list_rest(list);
-    free_cell(list);
+    delete list;
     list = next;
   }
   return (NIL_LIST);
@@ -163,7 +150,9 @@ void destroy_nodes(LIST list, void_dest destructor) {
   ASSERT_HOST(destructor != nullptr);
 
   while (list != NIL_LIST) {
-    if (first_node(list) != nullptr) (*destructor)(first_node(list));
+    if (first_node(list) != nullptr) {
+      (*destructor)(first_node(list));
+    }
     list = pop(list);
   }
 }
@@ -174,7 +163,9 @@ void destroy_nodes(LIST list, void_dest destructor) {
  *  Return the last list item (this is list type).
  **********************************************************************/
 LIST last(LIST var_list) {
-  while (list_rest(var_list) != NIL_LIST) var_list = list_rest(var_list);
+  while (list_rest(var_list) != NIL_LIST) {
+    var_list = list_rest(var_list);
+  }
   return (var_list);
 }
 
@@ -185,13 +176,8 @@ LIST last(LIST var_list) {
  *  that it occupied in the list.
  **********************************************************************/
 LIST pop(LIST list) {
-  LIST temp;
-
-  temp = list_rest(list);
-
-  if (list != NIL_LIST) {
-    free_cell(list);
-  }
+  LIST temp = list_rest(list);
+  delete list;
   return (temp);
 }
 
@@ -204,8 +190,8 @@ LIST pop(LIST list) {
 LIST push(LIST list, void *element) {
   LIST t;
 
-  t = new_cell();
-  t->node = (LIST)element;
+  t = new list_rec;
+  t->node = static_cast<LIST>(element);
   set_rest(t, list);
   return (t);
 }
@@ -222,8 +208,9 @@ LIST push_last(LIST list, void *item) {
     t = last(list);
     t->next = push(NIL_LIST, item);
     return (list);
-  } else
+  } else {
     return (push(NIL_LIST, item));
+  }
 }
 
 /**********************************************************************
@@ -234,8 +221,12 @@ LIST push_last(LIST list, void *item) {
  *  the third parameter to this routine.
  **********************************************************************/
 LIST search(LIST list, void *key, int_compare is_equal) {
-  if (is_equal == nullptr) is_equal = is_same;
+  if (is_equal == nullptr) {
+    is_equal = is_same;
+  }
 
   iterate(list) if ((*is_equal)(first_node(list), key)) return (list);
   return (NIL_LIST);
 }
+
+} // namespace tesseract

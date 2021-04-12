@@ -18,33 +18,26 @@
 #ifndef TESSERACT_CLASSIFY_CLUSTTOOL_H_
 #define TESSERACT_CLASSIFY_CLUSTTOOL_H_
 
-//--------------------------Include Files---------------------------------------
-#include <cstdio>
 #include "cluster.h"
-#include "host.h"
+
 #include "serialis.h"
 
-/*-------------------------------------------------------------------------
-        Public Function Prototype
---------------------------------------------------------------------------*/
+#include <cstdio>
+
+namespace tesseract {
+
 uint16_t ReadSampleSize(tesseract::TFile *fp);
 
 PARAM_DESC *ReadParamDesc(tesseract::TFile *fp, uint16_t N);
 
 PROTOTYPE *ReadPrototype(tesseract::TFile *fp, uint16_t N);
 
-float *ReadNFloats(tesseract::TFile *fp, uint16_t N, float Buffer[]);
-
+TESS_API
 void WriteParamDesc(FILE *File, uint16_t N, const PARAM_DESC ParamDesc[]);
 
+TESS_API
 void WritePrototype(FILE *File, uint16_t N, PROTOTYPE *Proto);
 
-void WriteNFloats (FILE * File, uint16_t N, float Array[]);
+} // namespace tesseract
 
-void WriteProtoStyle(FILE *File, PROTOSTYLE ProtoStyle);
-
-void WriteProtoList(FILE* File, uint16_t N, PARAM_DESC* ParamDesc,
-                    LIST ProtoList, bool WriteSigProtos,
-                    bool WriteInsigProtos);
-
-#endif  // TESSERACT_CLASSIFY_CLUSTTOOL_H_
+#endif // TESSERACT_CLASSIFY_CLUSTTOOL_H_

@@ -1,5 +1,4 @@
-/* -*-C-*-
- ********************************************************************************
+/******************************************************************************
  *
  * File:         oldlist.h  (Formerly list.h)
  * Description:  List processing procedures declarations.
@@ -16,13 +15,13 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  *
- ********************************************************************************
+ ******************************************************************************
  *
  * This file contains the interface for a set of general purpose list
  * manipulation routines.  For the implementation of these routines see
  * the file "list.c".
  *
- ********************************************************************************
+ ******************************************************************************
  *
  *                            INDEX
  *                           =======
@@ -63,18 +62,22 @@
 #ifndef LIST_H
 #define LIST_H
 
-#include "cutil.h"              // for int_compare, void_dest, ...
+#include <tesseract/export.h>
+
+namespace tesseract {
 
 /*----------------------------------------------------------------------
                   T y p e s
 ----------------------------------------------------------------------*/
 
-#define NIL_LIST  ((LIST)nullptr)
+#define NIL_LIST static_cast<LIST>(nullptr)
 
-struct list_rec
-{
-  struct list_rec *node;
-  struct list_rec *next;
+using int_compare = int (*)(void *, void *);
+using void_dest = void (*)(void *);
+
+struct list_rec {
+  list_rec *node;
+  list_rec *next;
 };
 using LIST = list_rec *;
 
@@ -82,7 +85,7 @@ using LIST = list_rec *;
                   M a c r o s
 ----------------------------------------------------------------------*/
 /* Predefinitions */
-#define list_rest(l)  ((l) ? (l)->next : NIL_LIST)
+#define list_rest(l) ((l) ? (l)->next : NIL_LIST)
 #define first_node(l) ((l) ? (l)->node : NIL_LIST)
 
 /**********************************************************************
@@ -92,18 +95,7 @@ using LIST = list_rec *;
  *  minus the head.  Continue until the list is NIL_LIST.
  **********************************************************************/
 
-#define iterate(l)             \
-for (; (l) != NIL_LIST; (l) = list_rest (l))
-
-/**********************************************************************
- * p u s h   o n
- *
- * Add a cell onto the front of a list.  The list given as an input
- * parameter is modified.
- **********************************************************************/
-
-#define push_on(list,thing)    \
-((list) = push (list, (LIST) (thing)))
+#define iterate(l) for (; (l) != NIL_LIST; (l) = list_rest(l))
 
 /**********************************************************************
  *  s e t   r e s t
@@ -113,8 +105,7 @@ for (; (l) != NIL_LIST; (l) = list_rest (l))
  *  #define set_rest(l,node)        l->next = node;
  **********************************************************************/
 
-#define set_rest(l,cell)\
-((l)->next = (cell))
+#define set_rest(l, cell) ((l)->next = (cell))
 
 /*----------------------------------------------------------------------
           Public Function Prototypes
@@ -123,6 +114,7 @@ int count(LIST var_list);
 
 LIST delete_d(LIST list, void *key, int_compare is_equal);
 
+TESS_API
 LIST destroy(LIST list);
 
 void destroy_nodes(LIST list, void_dest destructor);
@@ -131,10 +123,14 @@ LIST last(LIST var_list);
 
 LIST pop(LIST list);
 
+TESS_API
 LIST push(LIST list, void *element);
 
+TESS_API
 LIST push_last(LIST list, void *item);
 
 LIST search(LIST list, void *key, int_compare is_equal);
+
+} // namespace tesseract
 
 #endif

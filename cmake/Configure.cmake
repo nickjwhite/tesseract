@@ -82,18 +82,12 @@ include(TestBigEndian)
 set(include_files_list
     dlfcn.h
     inttypes.h
-    limits.h
-    malloc.h
     memory.h
-    stdbool.h
     stdint.h
     stdlib.h
     string.h
-    sys/ipc.h
-    sys/shm.h
     sys/stat.h
     sys/types.h
-    sys/wait.h
     unistd.h
 
     cairo/cairo-version.h
@@ -105,33 +99,26 @@ set(include_files_list
 )
 check_includes(include_files_list)
 
-set(functions_list
-    snprintf
-)
-check_functions(functions_list)
-
 set(types_list
     "long long int"
-    off_t
-    mbstate_t
     wchar_t
-    _Bool
 )
 check_types(types_list)
 
-set(PACKAGE_VERSION "${VERSION_PLAIN}")
 file(APPEND ${AUTOCONFIG_SRC} "
 /* Version number */
-#cmakedefine PACKAGE_VERSION \"${VERSION_PLAIN}\"
+#cmakedefine PACKAGE_VERSION \"${PACKAGE_VERSION}\"
+#cmakedefine GRAPHICS_DISABLED ${GRAPHICS_DISABLED}
+#cmakedefine DISABLED_LEGACY_ENGINE ${DISABLED_LEGACY_ENGINE}
+#cmakedefine HAVE_LIBARCHIVE ${HAVE_LIBARCHIVE}
 ")
 
-test_big_endian(WORDS_BIGENDIAN)
-
-file(APPEND ${AUTOCONFIG_SRC} "
-/* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
-   significant byte first (like Motorola and SPARC, unlike Intel). */
-#cmakedefine WORDS_BIGENDIAN 1
+if(TESSDATA_PREFIX)
+ add_definitions(-DTESSDATA_PREFIX=${TESSDATA_PREFIX})
+ file(APPEND ${AUTOCONFIG_SRC} "
+#cmakedefine TESSDATA_PREFIX ${TESSDATA_PREFIX}
 ")
+endif()
 
 ########################################
 

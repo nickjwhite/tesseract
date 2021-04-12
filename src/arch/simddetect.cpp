@@ -15,23 +15,36 @@
 // limitations under the License.
 ///////////////////////////////////////////////////////////////////////
 
-#include "simddetect.h"
+#ifdef HAVE_CONFIG_H
+#  include "config_auto.h" // for HAVE_AVX, ...
+#endif
+#include <numeric> // for std::inner_product
 #include "dotproduct.h"
-#include "dotproductavx.h"
-#include "dotproductsse.h"
-#include "params.h"   // for STRING_VAR
-#include "tprintf.h"  // for tprintf
+#include "intsimdmatrix.h" // for IntSimdMatrix
+#include "params.h"        // for STRING_VAR
+#include "simddetect.h"
+#include "tprintf.h" // for tprintf
 
-#if defined(AVX) || defined(AVX2) || defined(SSE4_1)
-# define HAS_CPUID
+#if defined(HAVE_AVX) || defined(HAVE_AVX2) || defined(HAVE_FMA) || defined(HAVE_SSE4_1)
+#  define HAS_CPUID
 #endif
 
 #if defined(HAS_CPUID)
-#if defined(__GNUC__)
-# include <cpuid.h>
-#elif defined(_WIN32)
-# include <intrin.h>
+#  if defined(__GNUC__)
+#    include <cpuid.h>
+#  elif defined(_WIN32)
+#    include <intrin.h>
+#  endif
 #endif
+
+#if defined(HAVE_NEON) && !defined(__aarch64__)
+#  ifdef ANDROID
+#    include <cpu-features.h>
+#  else
+/* Assume linux */
+#    include <asm/hwcap.h>
+#    include <sys/auxv.h>
+#  endif
 #endif
 
 namespace tesseract {
@@ -48,28 +61,45 @@ namespace tesseract {
 // in AVX registers.
 DotProductFunction DotProduct;
 
-static STRING_VAR(dotproduct, "auto",
-                  "Function used for calculation of dot product");
+static STRING_VAR(dotproduct, "auto", "Function used for calculation of dot product");
 
 SIMDDetect SIMDDetect::detector;
 
+#if defined(__aarch64__)
+// ARMv8 always has NEON.
+bool SIMDDetect::neon_available_ = true;
+#elif defined(HAVE_NEON)
+// If true, then Neon has been detected.
+bool SIMDDetect::neon_available_;
+#else
 // If true, then AVX has been detected.
 bool SIMDDetect::avx_available_;
 bool SIMDDetect::avx2_available_;
 bool SIMDDetect::avx512F_available_;
 bool SIMDDetect::avx512BW_available_;
+// If true, then FMA has been detected.
+bool SIMDDetect::fma_available_;
 // If true, then SSe4.1 has been detected.
 bool SIMDDetect::sse_available_;
+#endif
 
 // Computes and returns the dot product of the two n-vectors u and v.
-static double DotProductGeneric(const double* u, const double* v, int n) {
+static double DotProductGeneric(const double *u, const double *v, int n) {
   double total = 0.0;
-  for (int k = 0; k < n; ++k) total += u[k] * v[k];
+  for (int k = 0; k < n; ++k) {
+    total += u[k] * v[k];
+  }
   return total;
 }
 
-static void SetDotProduct(DotProductFunction function) {
-  DotProduct = function;
+// Compute dot product using std::inner_product.
+static double DotProductStdInnerProduct(const double *u, const double *v, int n) {
+  return std::inner_product(u, u + n, v, 0.0);
+}
+
+static void SetDotProduct(DotProductFunction f, const IntSimdMatrix *m = nullptr) {
+  DotProduct = f;
+  IntSimdMatrix::intSimdMatrix = m;
 }
 
 // Constructor.
@@ -82,56 +112,110 @@ SIMDDetect::SIMDDetect() {
   SetDotProduct(DotProductGeneric);
 
 #if defined(HAS_CPUID)
-#if defined(__GNUC__)
+#  if defined(__GNUC__)
   unsigned int eax, ebx, ecx, edx;
   if (__get_cpuid(1, &eax, &ebx, &ecx, &edx) != 0) {
     // Note that these tests all use hex because the older compilers don't have
     // the newer flags.
-#if defined(SSE4_1)
+#    if defined(HAVE_SSE4_1)
     sse_available_ = (ecx & 0x00080000) != 0;
-#endif
-#if defined(AVX)
-    avx_available_ = (ecx & 0x10000000) != 0;
-    if (avx_available_) {
-      // There is supposed to be a __get_cpuid_count function, but this is all
-      // there is in my cpuid.h. It is a macro for an asm statement and cannot
-      // be used inside an if.
-      __cpuid_count(7, 0, eax, ebx, ecx, edx);
-      avx2_available_ = (ebx & 0x00000020) != 0;
-      avx512F_available_ = (ebx & 0x00010000) != 0;
-      avx512BW_available_ = (ebx & 0x40000000) != 0;
+#    endif
+#    if defined(HAVE_AVX) || defined(HAVE_AVX2) || defined(HAVE_FMA)
+    auto xgetbv = []() {
+      uint32_t xcr0;
+      __asm__("xgetbv" : "=a"(xcr0) : "c"(0) : "%edx");
+      return xcr0;
+    };
+    if ((ecx & 0x08000000) && ((xgetbv() & 6) == 6)) {
+      // OSXSAVE bit is set, XMM state and YMM state are fine.
+#      if defined(HAVE_FMA)
+      fma_available_ = (ecx & 0x00001000) != 0;
+#      endif
+#      if defined(HAVE_AVX)
+      avx_available_ = (ecx & 0x10000000) != 0;
+      if (avx_available_) {
+        // There is supposed to be a __get_cpuid_count function, but this is all
+        // there is in my cpuid.h. It is a macro for an asm statement and cannot
+        // be used inside an if.
+        __cpuid_count(7, 0, eax, ebx, ecx, edx);
+        avx2_available_ = (ebx & 0x00000020) != 0;
+        avx512F_available_ = (ebx & 0x00010000) != 0;
+        avx512BW_available_ = (ebx & 0x40000000) != 0;
+      }
+#      endif
     }
-#endif
+#    endif
   }
 #  elif defined(_WIN32)
   int cpuInfo[4];
+  int max_function_id;
   __cpuid(cpuInfo, 0);
-  if (cpuInfo[0] >= 1) {
+  max_function_id = cpuInfo[0];
+  if (max_function_id >= 1) {
     __cpuid(cpuInfo, 1);
-#if defined(SSE4_1)
+#    if defined(HAVE_SSE4_1)
     sse_available_ = (cpuInfo[2] & 0x00080000) != 0;
-#endif
-#if defined(AVX)
-    avx_available_ = (cpuInfo[2] & 0x10000000) != 0;
-#endif
+#    endif
+#    if defined(HAVE_AVX) || defined(HAVE_AVX2) || defined(HAVE_FMA)
+    if ((cpuInfo[2] & 0x08000000) && ((_xgetbv(0) & 6) == 6)) {
+      // OSXSAVE bit is set, XMM state and YMM state are fine.
+#      if defined(HAVE_FMA)
+      fma_available_ = (cpuInfo[2] & 0x00001000) != 0;
+#      endif
+#      if defined(HAVE_AVX)
+      avx_available_ = (cpuInfo[2] & 0x10000000) != 0;
+#      endif
+#      if defined(HAVE_AVX2)
+      if (max_function_id >= 7) {
+        __cpuid(cpuInfo, 7);
+        avx2_available_ = (cpuInfo[1] & 0x00000020) != 0;
+        avx512F_available_ = (cpuInfo[1] & 0x00010000) != 0;
+        avx512BW_available_ = (cpuInfo[1] & 0x40000000) != 0;
+      }
+#      endif
+    }
+#    endif
   }
-#else
-#error "I don't know how to test for SIMD with this compiler"
+#  else
+#    error "I don't know how to test for SIMD with this compiler"
+#  endif
 #endif
+
+#if defined(HAVE_NEON) && !defined(__aarch64__)
+#  ifdef ANDROID
+  {
+    AndroidCpuFamily family = android_getCpuFamily();
+    if (family == ANDROID_CPU_FAMILY_ARM)
+      neon_available_ = (android_getCpuFeatures() & ANDROID_CPU_ARM_FEATURE_NEON);
+  }
+#  else
+  /* Assume linux */
+  neon_available_ = getauxval(AT_HWCAP) & HWCAP_NEON;
+#  endif
 #endif
 
   // Select code for calculation of dot product based on autodetection.
   if (false) {
     // This is a dummy to support conditional compilation.
-#if defined(AVX)
+#if defined(HAVE_AVX2)
+  } else if (avx2_available_) {
+    // AVX2 detected.
+    SetDotProduct(DotProductAVX, &IntSimdMatrix::intSimdMatrixAVX2);
+#endif
+#if defined(HAVE_AVX)
   } else if (avx_available_) {
     // AVX detected.
-    SetDotProduct(DotProductAVX);
+    SetDotProduct(DotProductAVX, &IntSimdMatrix::intSimdMatrixSSE);
 #endif
-#if defined(SSE4_1)
+#if defined(HAVE_SSE4_1)
   } else if (sse_available_) {
     // SSE detected.
-    SetDotProduct(DotProductSSE);
+    SetDotProduct(DotProductSSE, &IntSimdMatrix::intSimdMatrixSSE);
+#endif
+#if defined(HAVE_NEON) || defined(__aarch64__)
+  } else if (neon_available_) {
+    // NEON detected.
+    SetDotProduct(DotProduct, &IntSimdMatrix::intSimdMatrixNEON);
 #endif
   }
 }
@@ -139,44 +223,61 @@ SIMDDetect::SIMDDetect() {
 void SIMDDetect::Update() {
   // Select code for calculation of dot product based on the
   // value of the config variable if that value is not empty.
-  const char* dotproduct_method = "generic";
-  if (!strcmp(dotproduct.string(), "auto")) {
+  const char *dotproduct_method = "generic";
+  if (!strcmp(dotproduct.c_str(), "auto")) {
     // Automatic detection. Nothing to be done.
-  } else if (!strcmp(dotproduct.string(), "generic")) {
+  } else if (!strcmp(dotproduct.c_str(), "generic")) {
     // Generic code selected by config variable.
     SetDotProduct(DotProductGeneric);
     dotproduct_method = "generic";
-  } else if (!strcmp(dotproduct.string(), "native")) {
+  } else if (!strcmp(dotproduct.c_str(), "native")) {
     // Native optimized code selected by config variable.
     SetDotProduct(DotProductNative);
     dotproduct_method = "native";
-#if defined(AVX)
-  } else if (!strcmp(dotproduct.string(), "avx")) {
+#if defined(HAVE_AVX2)
+  } else if (!strcmp(dotproduct.c_str(), "avx2")) {
+    // AVX2 selected by config variable.
+    SetDotProduct(DotProductAVX, &IntSimdMatrix::intSimdMatrixAVX2);
+    dotproduct_method = "avx2";
+#endif
+#if defined(HAVE_AVX)
+  } else if (!strcmp(dotproduct.c_str(), "avx")) {
     // AVX selected by config variable.
-    SetDotProduct(DotProductAVX);
+    SetDotProduct(DotProductAVX, &IntSimdMatrix::intSimdMatrixSSE);
     dotproduct_method = "avx";
 #endif
-#if defined(SSE4_1)
-  } else if (!strcmp(dotproduct.string(), "sse")) {
+#if defined(HAVE_FMA)
+  } else if (!strcmp(dotproduct.c_str(), "fma")) {
+    // FMA selected by config variable.
+    SetDotProduct(DotProductFMA, IntSimdMatrix::intSimdMatrix);
+    dotproduct_method = "fma";
+#endif
+#if defined(HAVE_SSE4_1)
+  } else if (!strcmp(dotproduct.c_str(), "sse")) {
     // SSE selected by config variable.
-    SetDotProduct(DotProductSSE);
+    SetDotProduct(DotProductSSE, &IntSimdMatrix::intSimdMatrixSSE);
     dotproduct_method = "sse";
 #endif
+  } else if (!strcmp(dotproduct.c_str(), "std::inner_product")) {
+    // std::inner_product selected by config variable.
+    SetDotProduct(DotProductStdInnerProduct);
+    dotproduct_method = "std::inner_product";
   } else {
     // Unsupported value of config variable.
     tprintf("Warning, ignoring unsupported config variable value: dotproduct=%s\n",
-            dotproduct.string());
-    tprintf("Support values for dotproduct: auto generic native"
-#if defined(AVX)
-            " avx"
+            dotproduct.c_str());
+    tprintf(
+        "Support values for dotproduct: auto generic native"
+#if defined(HAVE_AVX)
+        " avx"
 #endif
-#if defined(SSE4_1)
-            " sse"
+#if defined(HAVE_SSE4_1)
+        " sse"
 #endif
-            ".\n");
+        " std::inner_product.\n");
   }
 
   dotproduct.set_value(dotproduct_method);
 }
 
-}  // namespace tesseract
+} // namespace tesseract

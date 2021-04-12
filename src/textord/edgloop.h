@@ -1,8 +1,7 @@
 /**********************************************************************
  * File:        edgloop.h  (Formerly edgeloop.h)
  * Description: Functions to clean up an outline before approximation.
- * Author:					Ray Smith
- * Created:					Tue Mar 26 16:56:25 GMT 1991
+ * Author:      Ray Smith
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,33 +16,29 @@
  *
  **********************************************************************/
 
-#ifndef           EDGLOOP_H
-#define           EDGLOOP_H
+#ifndef EDGLOOP_H
+#define EDGLOOP_H
 
-#include          "scrollview.h"
-#include          "params.h"
-#include          "pdblock.h"
-#include          "coutln.h"
-#include          "crakedge.h"
+#include "coutln.h"
+#include "crakedge.h"
+#include "params.h"
+#include "pdblock.h"
+#include "scrollview.h"
 
-#define BUCKETSIZE      16
+namespace tesseract {
 
+#define BUCKETSIZE 16
 
-extern INT_VAR_H (edges_children_per_grandchild, 10,
-"Importance ratio for chucking outlines");
-extern INT_VAR_H (edges_children_count_limit, 45,
-"Max holes allowed in blob");
-extern double_VAR_H (edges_childarea, 0.5,
-"Max area fraction of child outline");
-extern double_VAR_H (edges_boxarea, 0.8,
-"Min area fraction of grandchild for box");
-void complete_edge(CRACKEDGE *start,  //start of loop
-                   C_OUTLINE_IT* outline_it);
-ScrollView::Color check_path_legal(                  //certify outline
-                        CRACKEDGE *start  //start of loop
-                       );
-int16_t loop_bounding_box(                    //get bounding box
-                        CRACKEDGE *&start,  //edge loop
-                        ICOORD &botleft,    //bounding box
-                        ICOORD &topright);
+void complete_edge(CRACKEDGE *start, // start of loop
+                   C_OUTLINE_IT *outline_it);
+ScrollView::Color check_path_legal( // certify outline
+    CRACKEDGE *start                // start of loop
+);
+int16_t loop_bounding_box( // get bounding box
+    CRACKEDGE *&start,     // edge loop
+    ICOORD &botleft,       // bounding box
+    ICOORD &topright);
+
+} // namespace tesseract
+
 #endif

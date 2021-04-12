@@ -19,76 +19,64 @@
 #ifndef TESSERACT_CCUTIL_CCUTIL_H_
 #define TESSERACT_CCUTIL_CCUTIL_H_
 
-#include "ambigs.h"
+#ifndef _WIN32
+#  include <pthread.h>
+#  include <semaphore.h>
+#endif
+
+#ifdef HAVE_CONFIG_H
+#  include "config_auto.h" // DISABLED_LEGACY_ENGINE
+#endif
+
+#ifndef DISABLED_LEGACY_ENGINE
+#  include "ambigs.h"
+#endif
 #include "errcode.h"
-#include "strngs.h"
+#ifdef _WIN32
+#  include "host.h" // windows.h for HANDLE, ...
+#endif
 #include "params.h"
 #include "unicharset.h"
 
-#ifndef _WIN32
-#include <pthread.h>
-#include <semaphore.h>
-#endif
-
 namespace tesseract {
 
-class CCUtilMutex {
- public:
-  CCUtilMutex();
-
-  void Lock();
-
-  void Unlock();
- private:
-#ifdef _WIN32
-  HANDLE mutex_;
-#else
-  pthread_mutex_t mutex_;
-#endif
-};
-
-
-class CCUtil {
- public:
+class TESS_API CCUtil {
+public:
   CCUtil();
   virtual ~CCUtil();
 
- public:
+public:
   // Read the arguments and set up the data path.
-  void main_setup(
-                  const char *argv0,        // program name
-                  const char *basename      // name of image
-                 );
-  ParamsVectors *params() { return &params_; }
+  void main_setup(const std::string &argv0,   // program name
+                  const std::string &basename // name of image
+  );
+  ParamsVectors *params() {
+    return &params_;
+  }
 
-  STRING datadir;        // dir for data files
-  STRING imagebasename;  // name of image
-  STRING lang;
-  STRING language_data_path_prefix;
+  std::string datadir;       // dir for data files
+  std::string imagebasename; // name of image
+  std::string lang;
+  std::string language_data_path_prefix;
   UNICHARSET unicharset;
+#ifndef DISABLED_LEGACY_ENGINE
   UnicharAmbigs unichar_ambigs;
-  STRING imagefile;  // image file name
-  STRING directory;  // main directory
+#endif
+  std::string imagefile; // image file name
+  std::string directory; // main directory
 
- private:
+private:
   ParamsVectors params_;
 
- public:
+public:
   // Member parameters.
   // These have to be declared and initialized after params_ member, since
   // params_ should be initialized before parameters are added to it.
-  #ifdef _WIN32
-  STRING_VAR_H(tessedit_module_name, WINDLLNAME,
-               "Module colocated with tessdata dir");
-  #endif
   INT_VAR_H(ambigs_debug_level, 0, "Debug level for unichar ambiguities");
-  BOOL_VAR_H(use_definite_ambigs_for_classifier, 0,
-             "Use definite ambiguities when running character classifier");
-  BOOL_VAR_H(use_ambigs_for_adaption, 0,
+  BOOL_VAR_H(use_ambigs_for_adaption, false,
              "Use ambigs for deciding whether to adapt to a character");
 };
 
-extern CCUtilMutex tprintfMutex;  // should remain global
-}  // namespace tesseract
+} // namespace tesseract
 
-#endif  // TESSERACT_CCUTIL_CCUTIL_H_
+#endif // TESSERACT_CCUTIL_CCUTIL_H_

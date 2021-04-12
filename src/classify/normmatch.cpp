@@ -2,7 +2,6 @@
  ** Filename:    normmatch.c
  ** Purpose:     Simple matcher based on character normalization features.
  ** Author:      Dan Johnson
- ** History:     Wed Dec 19 16:18:06 1990, DSJ, Created.
  **
  ** (c) Copyright Hewlett-Packard Company, 1988.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,37 +19,51 @@
 ----------------------------------------------------------------------------*/
 #include "normmatch.h"
 
-#include <cstdio>
-#include <cmath>
-
 #include "classify.h"
 #include "clusttool.h"
-#include "emalloc.h"
-#include "globals.h"
 #include "helpers.h"
 #include "normfeat.h"
-#include "unicharset.h"
 #include "params.h"
+#include "unicharset.h"
 
-struct NORM_PROTOS
-{
+#include <cmath>
+#include <cstdio>
+#include <sstream> // for std::istringstream
+
+namespace tesseract {
+
+struct NORM_PROTOS {
+  NORM_PROTOS(size_t n) : NumProtos(n), Protos(n) {
+  }
   int NumParams;
-  PARAM_DESC *ParamDesc;
-  LIST* Protos;
   int NumProtos;
+  PARAM_DESC *ParamDesc;
+  std::vector<LIST> Protos;
 };
 
 /*----------------------------------------------------------------------------
-          Private Function Prototypes
+              Private Code
 ----------------------------------------------------------------------------*/
-double NormEvidenceOf(double NormAdj);
 
-void PrintNormMatch(FILE *File,
-                    int NumParams,
-                    PROTOTYPE *Proto,
-                    FEATURE Feature);
+/**
+ * @name NormEvidenceOf
+ *
+ * Return the new type of evidence number corresponding to this
+ * normalization adjustment.  The equation that represents the transform is:
+ *       1 / (1 + (NormAdj / midpoint) ^ curl)
+ */
+static double NormEvidenceOf(double NormAdj) {
+  NormAdj /= classify_norm_adj_midpoint;
 
-NORM_PROTOS *ReadNormProtos(FILE *File);
+  if (classify_norm_adj_curl == 3) {
+    NormAdj = NormAdj * NormAdj * NormAdj;
+  } else if (classify_norm_adj_curl == 2) {
+    NormAdj = NormAdj * NormAdj;
+  } else {
+    NormAdj = pow(NormAdj, classify_norm_adj_curl);
+  }
+  return (1.0 / (1.0 + NormAdj));
+}
 
 /*----------------------------------------------------------------------------
         Variables
@@ -65,8 +78,6 @@ const double kWidthErrorWeighting = 0.125;
 /*----------------------------------------------------------------------------
               Public Code
 ----------------------------------------------------------------------------*/
-/*---------------------------------------------------------------------------*/
-namespace tesseract {
 /**
  * This routine compares Features against each character
  * normalization proto for ClassId and returns the match
@@ -80,9 +91,7 @@ namespace tesseract {
  *
  * @return Best match rating for Feature against protos of ClassId.
  */
-float Classify::ComputeNormMatch(CLASS_ID ClassId,
-                                 const FEATURE_STRUCT& feature,
-                                 bool DebugMatch) {
+float Classify::ComputeNormMatch(CLASS_ID ClassId, const FEATURE_STRUCT &feature, bool DebugMatch) {
   LIST Protos;
   float BestMatch;
   float Match;
@@ -97,13 +106,10 @@ float Classify::ComputeNormMatch(CLASS_ID ClassId,
   /* handle requests for classification as noise */
   if (ClassId == NO_CLASS) {
     /* kludge - clean up constants and make into control knobs later */
-    Match = (feature.Params[CharNormLength] *
-      feature.Params[CharNormLength] * 500.0 +
-      feature.Params[CharNormRx] *
-      feature.Params[CharNormRx] * 8000.0 +
-      feature.Params[CharNormRy] *
-      feature.Params[CharNormRy] * 8000.0);
-    return (1.0 - NormEvidenceOf (Match));
+    Match = (feature.Params[CharNormLength] * feature.Params[CharNormLength] * 500.0 +
+             feature.Params[CharNormRx] * feature.Params[CharNormRx] * 8000.0 +
+             feature.Params[CharNormRy] * feature.Params[CharNormRy] * 8000.0);
+    return (1.0 - NormEvidenceOf(Match));
   }
 
   BestMatch = FLT_MAX;
@@ -115,115 +121,54 @@ float Classify::ComputeNormMatch(CLASS_ID ClassId,
 
   ProtoId = 0;
   iterate(Protos) {
-    Proto = (PROTOTYPE *) first_node (Protos);
+    Proto = reinterpret_cast<PROTOTYPE *> first_node(Protos);
     Delta = feature.Params[CharNormY] - Proto->Mean[CharNormY];
     Match = Delta * Delta * Proto->Weight.Elliptical[CharNormY];
     if (DebugMatch) {
-      tprintf("YMiddle: Proto=%g, Delta=%g, Var=%g, Dist=%g\n",
-              Proto->Mean[CharNormY], Delta,
+      tprintf("YMiddle: Proto=%g, Delta=%g, Var=%g, Dist=%g\n", Proto->Mean[CharNormY], Delta,
               Proto->Weight.Elliptical[CharNormY], Match);
     }
     Delta = feature.Params[CharNormRx] - Proto->Mean[CharNormRx];
     Match += Delta * Delta * Proto->Weight.Elliptical[CharNormRx];
     if (DebugMatch) {
-      tprintf("Height: Proto=%g, Delta=%g, Var=%g, Dist=%g\n",
-              Proto->Mean[CharNormRx], Delta,
+      tprintf("Height: Proto=%g, Delta=%g, Var=%g, Dist=%g\n", Proto->Mean[CharNormRx], Delta,
               Proto->Weight.Elliptical[CharNormRx], Match);
     }
     // Ry is width! See intfx.cpp.
     Delta = feature.Params[CharNormRy] - Proto->Mean[CharNormRy];
     if (DebugMatch) {
-      tprintf("Width: Proto=%g, Delta=%g, Var=%g\n",
-              Proto->Mean[CharNormRy], Delta,
+      tprintf("Width: Proto=%g, Delta=%g, Var=%g\n", Proto->Mean[CharNormRy], Delta,
               Proto->Weight.Elliptical[CharNormRy]);
     }
     Delta = Delta * Delta * Proto->Weight.Elliptical[CharNormRy];
     Delta *= kWidthErrorWeighting;
     Match += Delta;
     if (DebugMatch) {
-      tprintf("Total Dist=%g, scaled=%g, sigmoid=%g, penalty=%g\n",
-              Match, Match / classify_norm_adj_midpoint,
-              NormEvidenceOf(Match), 256 * (1 - NormEvidenceOf(Match)));
+      tprintf("Total Dist=%g, scaled=%g, sigmoid=%g, penalty=%g\n", Match,
+              Match / classify_norm_adj_midpoint, NormEvidenceOf(Match),
+              256 * (1 - NormEvidenceOf(Match)));
     }
 
-    if (Match < BestMatch)
+    if (Match < BestMatch) {
       BestMatch = Match;
+    }
 
     ProtoId++;
   }
   return 1.0 - NormEvidenceOf(BestMatch);
-}                                /* ComputeNormMatch */
+} /* ComputeNormMatch */
 
 void Classify::FreeNormProtos() {
   if (NormProtos != nullptr) {
-    for (int i = 0; i < NormProtos->NumProtos; i++)
+    for (int i = 0; i < NormProtos->NumProtos; i++) {
       FreeProtoList(&NormProtos->Protos[i]);
-    Efree(NormProtos->Protos);
-    Efree(NormProtos->ParamDesc);
-    Efree(NormProtos);
+    }
+    delete[] NormProtos->ParamDesc;
+    delete NormProtos;
     NormProtos = nullptr;
   }
 }
-}  // namespace tesseract
 
-/*----------------------------------------------------------------------------
-              Private Code
-----------------------------------------------------------------------------*/
-/**
- * @name NormEvidenceOf
- *
- * Return the new type of evidence number corresponding to this
- * normalization adjustment.  The equation that represents the transform is:
- *       1 / (1 + (NormAdj / midpoint) ^ curl)
- */
-double NormEvidenceOf(double NormAdj) {
-  NormAdj /= classify_norm_adj_midpoint;
-
-  if (classify_norm_adj_curl == 3)
-    NormAdj = NormAdj * NormAdj * NormAdj;
-  else if (classify_norm_adj_curl == 2)
-    NormAdj = NormAdj * NormAdj;
-  else
-    NormAdj = pow (NormAdj, classify_norm_adj_curl);
-  return (1.0 / (1.0 + NormAdj));
-}
-
-
-/*---------------------------------------------------------------------------*/
-/**
- * This routine dumps out detailed normalization match info.
- * @param File    open text file to dump match debug info to
- * @param NumParams # of parameters in proto and feature
- * @param Proto[]   array of prototype parameters
- * @param Feature[] array of feature parameters
- * Globals: none
- * @return  none
- */
-void PrintNormMatch(FILE *File,
-                    int NumParams,
-                    PROTOTYPE *Proto,
-                    FEATURE Feature) {
-  int i;
-  float ParamMatch;
-  float TotalMatch;
-
-  for (i = 0, TotalMatch = 0.0; i < NumParams; i++) {
-    ParamMatch = (Feature->Params[i] - Mean(Proto, i)) /
-      StandardDeviation(Proto, i);
-
-    fprintf (File, " %6.1f", ParamMatch);
-
-    if (i == CharNormY || i == CharNormRx)
-      TotalMatch += ParamMatch * ParamMatch;
-  }
-  fprintf (File, " --> %6.1f (%4.2f)\n",
-    TotalMatch, NormEvidenceOf (TotalMatch));
-
-}                                /* PrintNormMatch */
-
-
-/*---------------------------------------------------------------------------*/
-namespace tesseract {
 /**
  * This routine allocates a new data structure to hold
  * a set of character normalization protos.  It then fills in
@@ -233,19 +178,13 @@ namespace tesseract {
  * @return Character normalization protos.
  */
 NORM_PROTOS *Classify::ReadNormProtos(TFile *fp) {
-  NORM_PROTOS *NormProtos;
-  int i;
   char unichar[2 * UNICHAR_LEN + 1];
   UNICHAR_ID unichar_id;
   LIST Protos;
   int NumProtos;
 
   /* allocate and initialization data structure */
-  NormProtos = (NORM_PROTOS *) Emalloc (sizeof (NORM_PROTOS));
-  NormProtos->NumProtos = unicharset.size();
-  NormProtos->Protos = (LIST *) Emalloc (NormProtos->NumProtos * sizeof(LIST));
-  for (i = 0; i < NormProtos->NumProtos; i++)
-    NormProtos->Protos[i] = NIL_LIST;
+  auto NormProtos = new NORM_PROTOS(unicharset.size());
 
   /* read file header and save in data structure */
   NormProtos->NumParams = ReadSampleSize(fp);
@@ -255,20 +194,27 @@ NORM_PROTOS *Classify::ReadNormProtos(TFile *fp) {
   const int kMaxLineSize = 100;
   char line[kMaxLineSize];
   while (fp->FGets(line, kMaxLineSize) != nullptr) {
-    if (sscanf(line, "%s %d", unichar, &NumProtos) != 2) continue;
+    std::istringstream stream(line);
+    stream.imbue(std::locale::classic());
+    stream >> unichar >> NumProtos;
+    if (stream.fail()) {
+      continue;
+    }
     if (unicharset.contains_unichar(unichar)) {
       unichar_id = unicharset.unichar_to_id(unichar);
       Protos = NormProtos->Protos[unichar_id];
-      for (i = 0; i < NumProtos; i++)
+      for (int i = 0; i < NumProtos; i++) {
         Protos = push_last(Protos, ReadPrototype(fp, NormProtos->NumParams));
+      }
       NormProtos->Protos[unichar_id] = Protos;
     } else {
-      tprintf("Error: unichar %s in normproto file is not in unichar set.\n",
-              unichar);
-      for (i = 0; i < NumProtos; i++)
+      tprintf("Error: unichar %s in normproto file is not in unichar set.\n", unichar);
+      for (int i = 0; i < NumProtos; i++) {
         FreePrototype(ReadPrototype(fp, NormProtos->NumParams));
+      }
     }
   }
-  return (NormProtos);
-}                                /* ReadNormProtos */
-}  // namespace tesseract
+  return NormProtos;
+} /* ReadNormProtos */
+
+} // namespace tesseract

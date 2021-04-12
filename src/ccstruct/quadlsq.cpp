@@ -2,7 +2,6 @@
  * File:        quadlsq.cpp  (Formerly qlsq.c)
  * Description: Code for least squares approximation of quadratics.
  * Author:      Ray Smith
- * Created:     Wed Oct  6 15:14:23 BST 1993
  *
  * (C) Copyright 1993, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,13 +16,17 @@
  *
  **********************************************************************/
 
-#include <cstdio>
-#include <cmath>
 #include "quadlsq.h"
+
 #include "tprintf.h"
 
+#include <cmath>
+#include <cstdio>
+
+namespace tesseract {
+
 // Minimum variance in least squares before backing off to a lower degree.
-const double kMinVariance = 1.0 / 1024;
+const long double kMinVariance = 1.0L / 1024;
 
 /**********************************************************************
  * QLSQ::clear
@@ -31,12 +34,12 @@ const double kMinVariance = 1.0 / 1024;
  * Function to initialize a QLSQ.
  **********************************************************************/
 
-void QLSQ::clear() {  // initialize
+void QLSQ::clear() { // initialize
   a = 0.0;
   b = 0.0;
   c = 0.0;
-  n = 0;                           // No elements.
-  sigx = 0.0;                      // Zero accumulators.
+  n = 0;      // No elements.
+  sigx = 0.0; // Zero accumulators.
   sigy = 0.0;
   sigxx = 0.0;
   sigxy = 0.0;
@@ -46,7 +49,6 @@ void QLSQ::clear() {  // initialize
   sigxxxx = 0.0;
 }
 
-
 /**********************************************************************
  * QLSQ::add
  *
@@ -54,8 +56,8 @@ void QLSQ::clear() {  // initialize
  **********************************************************************/
 
 void QLSQ::add(double x, double y) {
-  n++;                           // Count elements.
-  sigx += x;                     // Update accumulators.
+  n++;       // Count elements.
+  sigx += x; // Update accumulators.
   sigy += y;
   sigxx += x * x;
   sigxy += x * y;
@@ -64,7 +66,6 @@ void QLSQ::add(double x, double y) {
   sigxxy += static_cast<long double>(x) * x * y;
   sigxxxx += static_cast<long double>(x) * x * x * x;
 }
-
 
 /**********************************************************************
  * QLSQ::remove
@@ -77,8 +78,8 @@ void QLSQ::remove(double x, double y) {
     tprintf("Can't remove an element from an empty QLSQ accumulator!\n");
     return;
   }
-  n--;                           // Count elements.
-  sigx -= x;                     // Update accumulators.
+  n--;       // Count elements.
+  sigx -= x; // Update accumulators.
   sigy -= y;
   sigxx -= x * x;
   sigxy -= x * y;
@@ -87,7 +88,6 @@ void QLSQ::remove(double x, double y) {
   sigxxy -= static_cast<long double>(x) * x * y;
   sigxxxx -= static_cast<long double>(x) * x * x * x;
 }
-
 
 /**********************************************************************
  * QLSQ::fit
@@ -98,8 +98,8 @@ void QLSQ::remove(double x, double y) {
  **********************************************************************/
 
 void QLSQ::fit(int degree) {
-  long double x_variance = static_cast<long double>(sigxx) * n -
-      static_cast<long double>(sigx) * sigx;
+  long double x_variance =
+      static_cast<long double>(sigxx) * n - static_cast<long double>(sigx) * sigx;
 
   // Note: for computational efficiency, we do not normalize the variance,
   // covariance and cube variance here as they are in the same order in both
@@ -115,19 +115,18 @@ void QLSQ::fit(int degree) {
     }
     return;
   }
-  long double top96 = 0.0;       // Accurate top.
-  long double bottom96 = 0.0;    // Accurate bottom.
+  long double top96 = 0.0;    // Accurate top.
+  long double bottom96 = 0.0; // Accurate bottom.
   long double cubevar = sigxxx * n - static_cast<long double>(sigxx) * sigx;
-  long double covariance = static_cast<long double>(sigxy) * n -
-      static_cast<long double>(sigx) * sigy;
+  long double covariance =
+      static_cast<long double>(sigxy) * n - static_cast<long double>(sigx) * sigy;
 
   if (n >= 4 && degree >= 2) {
     top96 = cubevar * covariance;
     top96 += x_variance * (static_cast<long double>(sigxx) * sigy - sigxxy * n);
 
     bottom96 = cubevar * cubevar;
-    bottom96 -= x_variance *
-        (sigxxxx * n - static_cast<long double>(sigxx) * sigxx);
+    bottom96 -= x_variance * (sigxxxx * n - static_cast<long double>(sigxx) * sigxx);
   }
   if (bottom96 >= kMinVariance * n * n * n * n) {
     // Denominators looking good
@@ -141,3 +140,5 @@ void QLSQ::fit(int degree) {
   }
   c = (sigy - a * sigxx - b * sigx) / n;
 }
+
+} // namespace tesseract

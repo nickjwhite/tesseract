@@ -15,13 +15,16 @@
 ///////////////////////////////////////////////////////////////////////
 
 #include "matrix.h"
-#include "genericvector.h"
 #include "include_gunit.h"
 
-namespace {
+namespace tesseract {
 
 class MatrixTest : public ::testing::Test {
- protected:
+protected:
+  void SetUp() override {
+    std::locale::global(std::locale(""));
+  }
+
   // Fills src_ with data so it can pretend to be a tensor thus:
   //  dims_=[5, 4, 3, 2]
   //  array_=[0, 1, 2, ....119]
@@ -35,7 +38,9 @@ class MatrixTest : public ::testing::Test {
     for (int i = 0; i < kInputSize_; ++i) {
       src_.put(0, i, i);
     }
-    for (int i = 0; i < kNumDims_; ++i) dims_[i] = 5 - i;
+    for (int i = 0; i < kNumDims_; ++i) {
+      dims_[i] = 5 - i;
+    }
   }
   // Number of dimensions in src_.
   static const int kNumDims_ = 4;
@@ -131,4 +136,4 @@ TEST_F(MatrixTest, RotatingTranspose_0_2) {
   EXPECT_EQ(6, m(15, 0));
 }
 
-}  // namespace
+} // namespace tesseract

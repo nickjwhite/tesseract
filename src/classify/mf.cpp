@@ -2,7 +2,6 @@
  ** Filename:    mf.c
  ** Purpose:     Micro-feature interface to flexible feature extractor.
  ** Author:      Dan Johnson
- ** History:     Thu May 24 09:08:38 1990, DSJ, Created.
  **
  ** (c) Copyright Hewlett-Packard Company, 1988.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,9 +25,8 @@
 
 #include <cmath>
 
-/*----------------------------------------------------------------------------
-        Global Data Definitions and Declarations
-----------------------------------------------------------------------------*/
+namespace tesseract {
+
 /*----------------------------------------------------------------------------
               Private Code
 ----------------------------------------------------------------------------*/
@@ -40,23 +38,22 @@
  * @param cn_denorm  control parameter to feature extractor.
  * @return Micro-features for Blob.
  */
-FEATURE_SET ExtractMicros(TBLOB* Blob, const DENORM& cn_denorm) {
+FEATURE_SET ExtractMicros(TBLOB *Blob, const DENORM &cn_denorm) {
   int NumFeatures;
   MICROFEATURES Features, OldFeatures;
-  FEATURE_SET FeatureSet;
-  FEATURE Feature;
   MICROFEATURE OldFeature;
 
   OldFeatures = BlobMicroFeatures(Blob, cn_denorm);
-  if (OldFeatures == nullptr)
+  if (OldFeatures == nullptr) {
     return nullptr;
-  NumFeatures = count (OldFeatures);
-  FeatureSet = NewFeatureSet (NumFeatures);
+  }
+  NumFeatures = count(OldFeatures);
+  auto FeatureSet = new FEATURE_SET_STRUCT(NumFeatures);
 
   Features = OldFeatures;
   iterate(Features) {
-    OldFeature = (MICROFEATURE) first_node (Features);
-    Feature = NewFeature (&MicroFeatureDesc);
+    OldFeature = reinterpret_cast<MICROFEATURE> first_node(Features);
+    auto Feature = new FEATURE_STRUCT(&MicroFeatureDesc);
     Feature->Params[MFDirection] = OldFeature[ORIENTATION];
     Feature->Params[MFXPosition] = OldFeature[XPOSITION];
     Feature->Params[MFYPosition] = OldFeature[YPOSITION];
@@ -78,4 +75,6 @@ FEATURE_SET ExtractMicros(TBLOB* Blob, const DENORM& cn_denorm) {
   }
   FreeMicroFeatures(OldFeatures);
   return FeatureSet;
-}                                /* ExtractMicros */
+} /* ExtractMicros */
+
+} // namespace tesseract

@@ -1,16 +1,22 @@
 include config.mk
 
-VERSION = 4.0.0
-LIBVERSION = 4
+VERSION = 5.0.0-alpha-20201231
+VERSION_MAJ = 5
+VERSION_MIN = 0
+VERSION_MIC = 0
+LIBVERSION = 5
 
 CPPFLAGS = -DUSE_STD_NAMESPACE -DVERSION=\"$(VERSION)\" -DPACKAGE_VERSION=\"$(VERSION)\" \
            -DTESSDATA_PREFIX=$(TESSDATAPREFIX) \
+           -DTESS_COMMON_TRAINING_API= -DTESS_PANGO_TRAINING_API= -DTESS_COMMON_TRAINING_API= -DPANGO_ENABLE_ENGINE -DTESS_UNICHARSET_TRAINING_API= \
+           $(OPTIMIZATION_CPPFLAGS) \
            -Wall \
            -fPIC \
            -O2 \
-           -std=c++11 \
-           -I../src/ \
+           -std=c++17 -std=c++20 \
+           -I../include -I../src \
            -I../src/ccmain -I../src/api -I../src/ccutil -I../src/ccstruct -I../src/viewer -I../src/textord -I../src/dict -I../src/classify -I../src/display -I../src/wordrec -I../src/cutil -I../src/lstm -I../src/arch -I../src/opencl \
+           -I../src/training -I../src/training/common -I../src/training/pango -I../src/training/unicharset \
            $(LEPT_CPPFLAGS) \
            $(PANGO_CPPFLAGS) \
            $(OPENCL_CPPFLAGS) $(NOGRAPHICS_CPPFLAGS) $(EMBEDDED_CPPFLAGS) $(VISIBILITY_CPPFLAGS) $(ARCH_CPPFLAGS) \
@@ -41,6 +47,7 @@ include ccutil.mk
 include classify.mk
 include cutil.mk
 include dict.mk
+include include.mk
 include lstm.mk
 include opencl.mk
 include textord.mk
@@ -51,9 +58,8 @@ include wordrec.mk
 include tessdata.mk
 include scrollview.mk
 
-OBJ = $(API_OBJ) $(ARCH_OBJ) $(CCMAIN_OBJ) $(CCSTRUCT_OBJ) $(CCUTIL_OBJ) $(CLASSIFY_OBJ) $(CUTIL_OBJ) $(DICT_OBJ) $(LSTM_OBJ) $(OPENCL_OBJ) $(TEXTORD_OBJ) $(VIEWER_OBJ) $(WORDREC_OBJ) $(EXTRA_OBJ)
-
-INSTHDR = $(API_INSTHDR) $(ARCH_INSTHDR) $(CCMAIN_INSTHDR) $(CCSTRUCT_INSTHDR) $(CCUTIL_INSTHDR)
+OBJ = $(API_OBJ) $(ARCH_OBJ) $(CCMAIN_OBJ) $(CCSTRUCT_OBJ) $(CCUTIL_OBJ) $(CLASSIFY_OBJ) $(DICT_OBJ) $(LSTM_OBJ) $(OPENCL_OBJ) $(TEXTORD_OBJ) $(VIEWER_OBJ) $(WORDREC_OBJ) $(EXTRA_OBJ)
+$(OBJ): $(INSTHDR)
 
 
 # Inference rules
@@ -97,11 +103,11 @@ $(BIN): ../src/api/tesseractmain.cpp $(LIB)
 
 $(TRAINING_BIN): $(LIB) $(TRAINING_LIB) $(TRAINING_BINSRC)
 	echo CXX $@
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(PANGOCPPFLAGS) $@.cpp ../src/training/commontraining.cpp -o $@ -L.. -ltesseract -ltesseract_training $(LDFLAGS) $(ICU_LDFLAGS) $(PANGO_LDFLAGS) $(LEPT_LDFLAGS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(PANGOCPPFLAGS) $@.cpp ../src/training/common/commontraining.cpp -o $@ -L.. -ltesseract -ltesseract_training $(LDFLAGS) $(ICU_LDFLAGS) $(PANGO_LDFLAGS) $(LEPT_LDFLAGS)
 
 $(TRAINING_LEGACY_BIN): $(LIB) $(TRAINING_LIB) $(TRAINING_LEGACY_BINSRC)
 	echo CXX $@
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(PANGOCPPFLAGS) $@.cpp ../src/training/commontraining.cpp -o $@ -L.. -ltesseract -ltesseract_training $(LDFLAGS) $(ICU_LDFLAGS) $(PANGO_LDFLAGS) $(LEPT_LDFLAGS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(PANGOCPPFLAGS) $@.cpp ../src/training/common/commontraining.cpp -o $@ -L.. -ltesseract -ltesseract_training $(LDFLAGS) $(ICU_LDFLAGS) $(PANGO_LDFLAGS) $(LEPT_LDFLAGS)
 
 $(SCROLLVIEW): $(SCROLLVIEW_CLASSES)
 	echo JAR $@
